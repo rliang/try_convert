@@ -28,16 +28,16 @@ mod tests {
         #[try_convert(unwrap, from = "Option<i32>")]
         some_option: i32,
         #[try_convert(unwrap, from = "Option<Vec<i32>>")]
-        #[try_convert(map, from = "Vec<i32>", error = "CustomErrorVariant")]
-        some_vec: Vec<i16>,
-        #[try_convert(from = "source::Enum")]
-        some_enum: MyEnum,
-        #[try_convert(get = "from.some_string")]
         #[try_convert(
             filter = "|x| !x.is_empty()",
             error = "EmptyString",
             description = "the string is empty"
         )]
+        #[try_convert(map, from = "Vec<i32>", error = "CustomErrorVariant")]
+        some_vec: Vec<i16>,
+        #[try_convert(from = "source::Enum")]
+        some_enum: MyEnum,
+        #[try_convert(get = "from.some_string")]
         some_renamed_string: String,
     }
 
@@ -81,7 +81,7 @@ mod tests {
             some_passthrough: 42,
             some_string: "".to_string(),
             some_option: Some(42),
-            some_vec: Some(vec![1, 2, 3]),
+            some_vec: Some(vec![]),
             some_enum: source::Enum::B { a: 1, b: 2 },
         };
 

@@ -517,8 +517,16 @@ fn process_fields(
             })
             .map_or(from_accessor, |expr| quote! { #expr });
 
-        let mut last_transform: Option<FromFieldAttribute> = None;
-        for field_attr in attrs {
+        let find_next_type = |attrs: &[FieldAttribute]| {
+            attrs
+                .iter()
+                .find_map(|attr| match attr {
+                    FieldAttribute::From(FromFieldAttribute { ty, .. }) => Some(ty.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| to_ty.clone())
+        };
+        for (i, field_attr) in attrs.iter().enumerate() {
             match field_attr {
                 FieldAttribute::Get(_) => {}
                 FieldAttribute::Filter(FilterFieldAttribute {
@@ -526,15 +534,14 @@ fn process_fields(
                     error,
                     description,
                 }) => {
-                    expr = quote! { Some(#expr).filter(#filter).ok_or(#error_name::#error)? };
-                    error_variants.push(generate_error_variant(&error, &None, description));
+                    let to = find_next_type(&attrs[i + 1..]);
+                    expr =
+                        quote! { Some::<#to>(#expr).filter(#filter).ok_or(#error_name::#error)? };
+                    error_variants.push(generate_error_variant(error, &None, description.clone()));
                 }
-                FieldAttribute::From(next_transform) => {
-                    let to = next_transform.ty.clone();
-                    let Some(transform) = last_transform.replace(next_transform) else {
-                        continue;
-                    };
-                    let mut from = transform.ty;
+                FieldAttribute::From(transform) => {
+                    let to = find_next_type(&attrs[i + 1..]);
+                    let mut from = transform.ty.clone();
 
                     if transform.unwrap {
                         let error = transform
@@ -568,7 +575,7 @@ fn process_fields(
                     error_variants.push(generate_error_variant(
                         error,
                         &Some(quote! { (<#to as TryFrom<#from>>::Error) }),
-                        transform.description,
+                        transform.description.clone(),
                     ));
                 }
             }
