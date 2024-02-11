@@ -15,7 +15,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use std::string::ToString;
 use syn::{
-    parse::Error, parse2, parse_macro_input, parse_quote, spanned::Spanned, Data, DeriveInput,
+    parse::Error, parse2, parse_macro_input, parse_quote, spanned::Spanned, Arm, Data, DeriveInput,
     Expr, Fields, GenericArgument, Ident, Pat, PathArguments, PathSegment, Type, TypePath, Variant,
 };
 
@@ -255,38 +255,16 @@ fn implement(
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    match data {
-        Data::Struct(data) => {
-            let from_var_ident = format_ident!("from");
-            let self_constructor = process_fields(
-                quote! { Self },
-                Some(&from_var_ident),
-                &data.fields,
-                &error_name,
-                &mut error_builder,
-            )?;
-
-            error_builder.build().map_or_else(|| Ok(quote! {
-                impl #impl_generics From<#from_type> for #ident #ty_generics #where_clause {
-                    fn from(#from_var_ident: #from_type) -> Self {
-                        #self_constructor
-                    }
-                }
-            }), |error| Ok(quote! {
-                #error
-
-                #[automatically_derived]
-                impl #impl_generics TryFrom<#from_type> for #ident #ty_generics #where_clause {
-                    type Error = #error_name;
-
-                    fn try_from(#from_var_ident: #from_type) -> Result<Self, Self::Error> {
-                        Ok(#self_constructor)
-                    }
-                }
-            }))
-        }
+    let constructor = match data {
+        Data::Struct(data) => process_fields(
+            quote! { Self },
+            Some(&(format_ident!("from"))),
+            &data.fields,
+            &error_name,
+            &mut error_builder,
+        )?,
         Data::Enum(data) => {
-            let mut from_variants = vec![];
+            let mut arms_from: Vec<Arm> = vec![];
             for variant in &data.variants {
                 let Variant {
                     attrs,
@@ -299,10 +277,10 @@ fn implement(
                     .collect::<Result<Vec<_>, _>>()?
                     .into_iter()
                     .next();
-                let arm = if let Some(VariantAttribute { from_arm, .. }) = attr {
-                    quote! { #from_arm  }
+                let pat = if let Some(VariantAttribute { from_arm, .. }) = attr {
+                    from_arm
                 } else if matches!(fields, Fields::Unit) {
-                    quote! { #from_type::#variant  }
+                    parse_quote! { #from_type::#variant  }
                 } else {
                     return Err({
                         Error::new(
@@ -318,9 +296,9 @@ fn implement(
                     &error_name,
                     &mut error_builder,
                 )?;
-                from_variants.push(quote! { #arm => #constructor });
+                arms_from.push(parse_quote! { #pat => #constructor });
             }
-            let excluded_arms = container
+            let arms_excluded: Vec<Arm> = container
                 .exclude
                 .into_iter()
                 .map(|arm| {
@@ -332,21 +310,34 @@ fn implement(
                         _ => return Err(Error::new(arm.span(), "expected a path or pattern")),
                     };
                     error_builder.add_variant(&error_ident, &None, None);
-                    Ok(quote! { #from_type::#arm => return Err(#error_name::#error_ident) })
+                    Ok(parse_quote! { #from_type::#arm => return Err(#error_name::#error_ident) })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let constructor = quote! {
+            parse_quote! {
                 match from {
-                    #(#excluded_arms,)*
-                    #(#from_variants,)*
+                    #(#arms_excluded,)*
+                    #(#arms_from,)*
                 }
-            };
-            error_builder.build().map_or_else(|| Ok(quote! {
+            }
+        }
+        Data::Union(_) => {
+            return Err(Error::new(
+                ident.span(),
+                "`TryConvert` cannot be derived for unions",
+            ))
+        }
+    };
+    Ok(error_builder.build().map_or_else(
+        || {
+            quote! {
                 #[automatically_derived]
                 impl #impl_generics From<#from_type> for #ident #ty_generics #where_clause {
                     fn from(from: #from_type) -> Self { #constructor }
                 }
-            }), |error| Ok(quote! {
+            }
+        },
+        |error| {
+            quote! {
                 #error
                 #[automatically_derived]
                 impl #impl_generics TryFrom<#from_type> for #ident #ty_generics #where_clause {
@@ -356,13 +347,9 @@ fn implement(
                         Ok(#constructor)
                     }
                 }
-            }))
-        }
-        Data::Union(_) => Err(Error::new(
-            ident.span(),
-            "`TryConvert` cannot be derived for unions",
-        )),
-    }
+            }
+        },
+    ))
 }
 
 #[proc_macro_derive(TryConvert, attributes(try_convert))]
