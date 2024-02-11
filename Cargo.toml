@@ -1,0 +1,26 @@
+[package]
+name = "try_convert"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/rliang/try_convert"
+description = "Auto-generate TryFrom and an error type, with minimal boilerplate"
+readme = "README.md"
+categories = ["development-tools", "rust-patterns"]
+keywords = ["try-from", "convert", "derive", "proc-macro", "thiserror"]
+
+[lib]
+proc-macro = true
+
+[features]
+default = ["thiserror"]
+thiserror = []
+
+[dependencies]
+syn = { version = '2', features = ["full"] }
+quote = '1'
+itertools = '0.11.0'
+convert_case = '0.6.0'
+
+[dev-dependencies]
+thiserror = "1.0.56"
