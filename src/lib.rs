@@ -108,16 +108,9 @@ fn process_fields(
             ..
         } = field;
 
-        let mut attrs = get_attributes(attrs)
+        let attrs = get_attributes(attrs)
             .map(FieldAttribute::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        attrs.push(FieldAttribute::From(FromFieldAttribute {
-            ty: to_ty.clone(),
-            map: false,
-            unwrap: false,
-            error: None,
-            description: None,
-        }));
 
         let (from_accessor, local_alias, mut title) = ident.clone().map_or_else(
             || {
