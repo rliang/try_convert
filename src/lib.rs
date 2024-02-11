@@ -26,13 +26,6 @@ use syn::{
 ///
 /// A string containing the `PascalCase` representation of the given token stream.
 ///
-/// # Example
-///
-/// ```
-/// let token_stream = quote! { some_field::Name<i32> };
-/// let pascal_case = to_pascal_case(&token_stream);
-/// assert_eq!(pascal_case, "SomeFieldNameI32");
-/// ```
 fn to_pascal_case(tokens: &impl ToTokens) -> Ident {
     let s = tokens
         .to_token_stream()

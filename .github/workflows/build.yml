@@ -22,5 +22,6 @@ jobs:
       - name: Verify publish crate
         uses: katyo/publish-crates@v2
         with:
+          args: --no-verify
           dry-run: true
-          no-verify: true
+
